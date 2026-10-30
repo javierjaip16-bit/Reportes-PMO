@@ -6,13 +6,13 @@
   <title>PMO FIBEX TELECOM - Dashboard de Gestión y Seguimiento</title>
   
   <!-- Estilos del Sistema -->
-  <link rel="stylesheet" href="assets/css/styles.css">
+  <link rel="stylesheet" href="assets/css/styles.css?v=2.1">
   
   <!-- Fuentes e Iconos -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <!-- Detección y aplicación inmediata del tema (evita parpadeo) -->
+  <!-- Detección y aplicación inmediata del tema (evita parpadeo y garantiza reactividad) -->
   <script>
     (function() {
       try {
@@ -22,6 +22,30 @@
         }
       } catch (e) {}
     })();
+
+    window.toggleDarkMode = function() {
+      var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      var next = isDark ? 'light' : 'dark';
+      if (next === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.body.classList.add('dark-mode');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+        document.body.classList.remove('dark-mode');
+      }
+      try { localStorage.setItem('pmo_theme', next); } catch(e) {}
+      var label = document.getElementById('theme-toggle-text');
+      if (label) label.textContent = next === 'dark' ? 'Modo Claro' : 'Modo Oscuro';
+      var iconDark = document.querySelector('.btn-theme-toggle .theme-icon-dark');
+      var iconLight = document.querySelector('.btn-theme-toggle .theme-icon-light');
+      if (iconDark && iconLight) {
+        iconDark.style.display = next === 'dark' ? 'none' : 'inline-block';
+        iconLight.style.display = next === 'dark' ? 'inline-block' : 'none';
+      }
+      if (typeof window.onThemeChange === 'function') {
+        window.onThemeChange(next);
+      }
+    };
   </script>
 </head>
 <body>
@@ -59,7 +83,7 @@
       </nav>
 
       <div class="navbar-actions">
-        <button class="btn-theme-toggle" id="btn-theme-toggle" type="button" title="Alternar Modo Oscuro / Claro" aria-label="Alternar tema">
+        <button class="btn-theme-toggle" id="btn-theme-toggle" type="button" title="Alternar Modo Oscuro / Claro" aria-label="Alternar tema" onclick="window.toggleDarkMode ? window.toggleDarkMode() : null">
           <svg class="theme-icon-dark" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/></svg>
           <svg class="theme-icon-light" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style="display: none;"><path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/></svg>
           <span id="theme-toggle-text">Modo Oscuro</span>
@@ -1182,9 +1206,9 @@
   </script>
 
   <!-- Datos Iniciales Embebidos y Lógica de la Aplicación -->
-  <script src="assets/js/initial_data.js"></script>
-  <script src="assets/js/standalone_resources.js"></script>
-  <script src="assets/js/app.js"></script>
+  <script src="assets/js/initial_data.js?v=2.1"></script>
+  <script src="assets/js/standalone_resources.js?v=2.1"></script>
+  <script src="assets/js/app.js?v=2.1"></script>
 
 </body>
 </html>

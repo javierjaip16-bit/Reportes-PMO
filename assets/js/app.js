@@ -2501,7 +2501,7 @@
     // Replace stylesheet link with inline <style>
     if (cssContent) {
       const styleTag = `<style id="app-styles">\n${cssContent}\n</style>`;
-      template = template.replace(/<link\s+rel=["']stylesheet["']\s+href=["']assets\/css\/styles\.css["']\s*>/i, () => styleTag);
+      template = template.replace(/<link\s+rel=["']stylesheet["']\s+href=["']assets\/css\/styles\.css(?:\?v=[^"']*)?["']\s*>/i, () => styleTag);
     }
 
     // Prepare self-contained scripts block without literal script tags in app source code
@@ -2688,6 +2688,8 @@
     }
   }
 
+  window.toggleDarkMode = toggleTheme;
+  window.onThemeChange = function(theme) { if (typeof Chart !== "undefined") updateCharts(); };
   function toggleTheme() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const nextTheme = isDark ? 'light' : 'dark';
