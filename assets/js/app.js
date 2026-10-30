@@ -2085,6 +2085,11 @@
   function updateCharts() {
     if (typeof Chart === 'undefined') return;
 
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textColor = isDark ? '#94a3b8' : '#64748b';
+    const gridColor = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+    const barLabelColor = isDark ? '#f1f5f9' : '#334155';
+
     // 1. Chart Comparativo por Sección (Home)
     const ctxComp = document.getElementById('chart-comparativo-canvas');
     if (ctxComp) {
@@ -2113,7 +2118,7 @@
             {
               label: 'Red IP (NOC)',
               data: [null, null, m.nocAdv],
-              backgroundColor: '#0f2942',
+              backgroundColor: isDark ? '#00bcd4' : '#0f2942',
               borderRadius: 4,
               borderWidth: 1
             }
@@ -2125,12 +2130,14 @@
           skipNull: true,
           scales: {
             x: {
-              grid: { display: false }
+              grid: { display: false },
+              ticks: { color: textColor }
             },
             y: {
               beginAtZero: true,
               max: 100,
-              ticks: { callback: v => `${v}%` }
+              ticks: { callback: v => `${v}%`, color: textColor },
+              grid: { color: gridColor }
             }
           },
           datasets: {
@@ -2144,6 +2151,7 @@
               position: 'top',
               labels: {
                 boxWidth: 12,
+                color: isDark ? '#e2e8f0' : '#1e293b',
                 font: { size: 11, weight: '600' }
               }
             },
@@ -2164,7 +2172,7 @@
                 const val = dataset.data[index];
                 if (val !== null && val !== undefined) {
                   ctx.save();
-                  ctx.fillStyle = '#334155';
+                  ctx.fillStyle = barLabelColor;
                   ctx.font = 'bold 11px system-ui, sans-serif';
                   ctx.textAlign = 'center';
                   ctx.textBaseline = 'bottom';
@@ -2209,7 +2217,7 @@
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10, weight: '600' } } }
+            legend: { position: 'bottom', labels: { boxWidth: 12, color: isDark ? '#cbd5e1' : '#475569', font: { size: 10, weight: '600' } } }
           },
           cutout: '65%'
         }
@@ -2223,6 +2231,8 @@
   function renderNocUrgentChart() {
     const ctxUrgent = document.getElementById('chart-noc-urgent-canvas');
     if (!ctxUrgent || typeof Chart === 'undefined') return;
+
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
     // Tally urgent tasks by department
     const urgentMap = {};
@@ -2317,14 +2327,14 @@
         scales: {
           x: {
             beginAtZero: true,
-            ticks: { precision: 0, stepSize: 1, color: '#9f1239', font: { weight: '600' } },
-            grid: { color: '#ffe4e6' }
+            ticks: { precision: 0, stepSize: 1, color: isDark ? '#fda4af' : '#9f1239', font: { weight: '600' } },
+            grid: { color: isDark ? 'rgba(244, 63, 94, 0.18)' : '#ffe4e6' }
           },
           y: {
             grid: { display: false },
             ticks: {
               font: { weight: '700', size: 12 },
-              color: '#4c0519'
+              color: isDark ? '#fecdd3' : '#4c0519'
             }
           }
         }
@@ -2643,7 +2653,67 @@
      EVENT LISTENERS INITIALIZATION
      ========================================================================== */
 
+  /* ==========================================================================
+     THEME (LIGHT / DARK MODE)
+     ========================================================================== */
+
+  function updateThemeUI(theme) {
+    const isDark = theme === 'dark';
+    const toggleText = document.getElementById('theme-toggle-text');
+    if (toggleText) {
+      toggleText.textContent = isDark ? 'Modo Claro' : 'Modo Oscuro';
+    }
+    const iconDark = document.querySelector('.btn-theme-toggle .theme-icon-dark');
+    const iconLight = document.querySelector('.btn-theme-toggle .theme-icon-light');
+    if (iconDark && iconLight) {
+      iconDark.style.display = isDark ? 'none' : 'inline-block';
+      iconLight.style.display = isDark ? 'inline-block' : 'none';
+    }
+  }
+
+  function applyTheme(theme, skipCharts) {
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.body.classList.add('dark-mode');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      document.body.classList.remove('dark-mode');
+    }
+    try {
+      localStorage.setItem('pmo_theme', theme);
+    } catch (e) {}
+    updateThemeUI(theme);
+    if (!skipCharts && typeof Chart !== 'undefined') {
+      updateCharts();
+    }
+  }
+
+  function toggleTheme() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const nextTheme = isDark ? 'light' : 'dark';
+    applyTheme(nextTheme);
+    showToast(nextTheme === 'dark' ? 'Modo oscuro activado' : 'Modo claro activado');
+  }
+
+  function initTheme() {
+    let saved = null;
+    try {
+      saved = localStorage.getItem('pmo_theme');
+    } catch (e) {}
+    if (!saved) {
+      const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      saved = prefersDark ? 'dark' : 'light';
+    }
+    applyTheme(saved, true);
+  }
+
   function setupEventListeners() {
+    // Dark mode toggle button
+    const btnThemeToggle = document.getElementById('btn-theme-toggle');
+    if (btnThemeToggle) {
+      btnThemeToggle.addEventListener('click', toggleTheme);
+    }
+
     // Navigation items
     document.querySelectorAll('.nav-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -3007,6 +3077,7 @@
      ========================================================================== */
 
   function initApp() {
+    initTheme();
     processData();
     setupEventListeners();
     renderApp();
