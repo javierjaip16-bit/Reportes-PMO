@@ -19,7 +19,18 @@
     nocResponsableFilter: '', // Selected responsable in NOC dropdown
     nocTaskFilter: null, // null, 'no_iniciadas', 'en_curso', 'completadas', 'retrasadas'
     searchQuery: '',
-    rawData: window.INITIAL_PMO_DATA || {},
+    rawData: (() => {
+      try {
+        const cached = localStorage.getItem('pmo_cached_sheets_data');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+            return parsed;
+          }
+        }
+      } catch (e) {}
+      return window.INITIAL_PMO_DATA || {};
+    })(),
     lastModifiedDate: (() => {
       try {
         if (window.PMO_LAST_MODIFIED_DATE) {
@@ -2343,45 +2354,166 @@
   }
 
   /* ==========================================================================
-     EXCEL IMPORT ENGINE (SheetJS)
+     GOOGLE SHEETS SYNC ENGINE
      ========================================================================== */
 
-  function handleExcelUpload(file) {
-    if (!file) return;
-    if (typeof XLSX === 'undefined') {
-      showToast('Error: Biblioteca SheetJS no disponible.');
-      return;
+  const GOOGLE_SHEETS_CONFIG = {
+    url: 'https://script.google.com/macros/s/AKfycbzLb7MTfQwsefep1bd6UxxxIVV6fEEsahG-eiOQiIYSxp0h0I_4SQvMThmTbjjsnqVM/exec',
+    storageKey: 'pmo_sheets_url',
+    dataCacheKey: 'pmo_cached_sheets_data',
+    lastSyncKey: 'pmo_last_sync_time'
+  };
+
+  function formatSyncTimestamp(date) {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '--';
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const mins = String(date.getMinutes()).padStart(2, '0');
+    return `${d}/${m}/${y} ${hours}:${mins}`;
+  }
+
+  function updateSyncBadgeUI(status, labelText, customTime) {
+    const badge = document.getElementById('sheets-sync-badge');
+    const dot = document.getElementById('sync-dot');
+    const label = document.getElementById('sync-status-label');
+    const timeEl = document.getElementById('sync-status-time');
+
+    if (badge) {
+      if (status === 'syncing') {
+        badge.classList.add('is-syncing');
+      } else {
+        badge.classList.remove('is-syncing');
+      }
     }
 
-    const reader = new FileReader();
-    reader.onload = function (e) {
-      try {
-        const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-        
-        const newData = {};
-        workbook.SheetNames.forEach(sheetName => {
-          const sheet = workbook.Sheets[sheetName];
-          const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: null, raw: false });
-          newData[sheetName] = jsonRows;
-        });
+    if (dot) {
+      dot.className = 'sync-dot';
+      if (status === 'syncing') dot.classList.add('syncing');
+      else if (status === 'error') dot.classList.add('error');
+      else if (status === 'offline') dot.classList.add('offline');
+    }
 
-        state.rawData = newData;
-        state.lastUpdated = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        recordModification();
-        
-        // Reprocess
-        processData();
-        renderApp();
+    if (label && labelText) {
+      label.textContent = labelText;
+    }
 
-        showToast(`¡Excel cargado con éxito! ${workbook.SheetNames.length} hojas actualizadas.`);
-      } catch (err) {
-        console.error('Error al procesar el archivo Excel:', err);
-        showToast('Error al leer el archivo Excel. Verifique el formato.');
+    if (timeEl) {
+      if (customTime) {
+        timeEl.textContent = customTime;
+      } else {
+        try {
+          const stored = localStorage.getItem(GOOGLE_SHEETS_CONFIG.lastSyncKey);
+          if (stored) {
+            const d = new Date(stored);
+            if (!isNaN(d.getTime())) {
+              timeEl.textContent = `Actualizado: ${formatSyncTimestamp(d)}`;
+              return;
+            }
+          }
+        } catch (e) {}
+        timeEl.textContent = `Actualizado: ${formatSyncTimestamp(state.lastModifiedDate)}`;
       }
-    };
-    reader.readAsArrayBuffer(file);
+    }
   }
+
+  function getGoogleSheetsUrl() {
+    try {
+      return localStorage.getItem(GOOGLE_SHEETS_CONFIG.storageKey) || GOOGLE_SHEETS_CONFIG.url;
+    } catch (e) {
+      return GOOGLE_SHEETS_CONFIG.url;
+    }
+  }
+
+  async function fetchGoogleSheetsData(isBackground = false) {
+    updateSyncBadgeUI('syncing', 'Sincronizando...', 'Actualizando...');
+
+    if (!isBackground) {
+      showToast('Conectando con Google Sheets...');
+    }
+
+    const url = getGoogleSheetsUrl();
+
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        redirect: 'follow',
+        cache: 'no-store'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const text = await response.text();
+
+      if (text.includes('accounts.google.com') || text.includes('Necesitas acceso') || text.includes('drive.google.com') || text.includes('ServiceLogin')) {
+        throw new Error('AUTH_REQUIRED');
+      }
+
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error('JSON_PARSE_ERROR');
+      }
+
+      if (!json || typeof json !== 'object' || Object.keys(json).length === 0) {
+        throw new Error('EMPTY_DATA');
+      }
+
+      state.rawData = json;
+      const now = new Date();
+      state.lastModifiedDate = now;
+      state.lastUpdated = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+      try {
+        localStorage.setItem(GOOGLE_SHEETS_CONFIG.dataCacheKey, JSON.stringify(json));
+        localStorage.setItem(GOOGLE_SHEETS_CONFIG.lastSyncKey, now.toISOString());
+      } catch (e) {}
+
+      recordModification();
+      processData();
+      renderApp();
+
+      updateSyncBadgeUI('online', 'Sincronizado', `Actualizado: ${formatSyncTimestamp(now)}`);
+      const sheetCount = Object.keys(json).length;
+      showToast(`¡Sincronizado con Google Sheets! (${sheetCount} frentes actualizados)`);
+
+    } catch (err) {
+      console.warn('Error al sincronizar con Google Sheets:', err);
+
+      if (err.message === 'AUTH_REQUIRED') {
+        updateSyncBadgeUI('error', 'Sheets (Permisos)', 'Requiere acceso');
+        showToast('⚠️ Google Sheets requiere permisos: en Apps Script cambia "Quién tiene acceso" a "Cualquier usuario".');
+      } else if (err.message === 'JSON_PARSE_ERROR') {
+        updateSyncBadgeUI('error', 'Error JSON', 'Formato inválido');
+        showToast('Error: La respuesta de Google Sheets no es un JSON válido.');
+      } else {
+        updateSyncBadgeUI('offline', 'Sheets Offline');
+        if (!isBackground) {
+          showToast('No se pudo conectar a Google Sheets. Verifique la conexión o permisos.');
+        }
+      }
+
+      // Fallback: check if we have cached sheets data
+      let cached = null;
+      try {
+        cached = localStorage.getItem(GOOGLE_SHEETS_CONFIG.dataCacheKey);
+      } catch (e) {}
+
+      if (cached && (!state.rawData || Object.keys(state.rawData).length === 0)) {
+        try {
+          state.rawData = JSON.parse(cached);
+          processData();
+          renderApp();
+        } catch (e) {}
+      }
+    }
+  }
+
+  window.fetchGoogleSheetsData = fetchGoogleSheetsData;
 
   /* ==========================================================================
      EXCEL EXPORT ENGINE
@@ -2567,7 +2699,7 @@
 
   function triggerDownloadReport(section) {
     // Clean classes
-    document.body.classList.remove('print-hubs-only', 'print-enlaces-only', 'print-noc-only', 'print-all-sections');
+    document.body.classList.remove('print-hubs-only', 'print-enlaces-only', 'print-noc-only');
 
     if (section === 'HUBS') {
       document.body.classList.add('print-hubs-only');
@@ -2575,8 +2707,6 @@
       document.body.classList.add('print-enlaces-only');
     } else if (section === 'NOC') {
       document.body.classList.add('print-noc-only');
-    } else if (section === 'ALL') {
-      document.body.classList.add('print-all-sections');
     }
 
     showToast(`Generando vista de descarga / impresión para ${section}...`);
@@ -2587,7 +2717,7 @@
 
   // Ensure clean restoration after printing or canceling print dialog
   window.addEventListener('afterprint', () => {
-    document.body.classList.remove('print-hubs-only', 'print-enlaces-only', 'print-noc-only', 'print-all-sections');
+    document.body.classList.remove('print-hubs-only', 'print-enlaces-only', 'print-noc-only');
   });
 
   /* ==========================================================================
@@ -2659,6 +2789,11 @@
 
   function updateThemeUI(theme) {
     const isDark = theme === 'dark';
+    const btn = document.getElementById('btn-theme-toggle');
+    if (btn) {
+      btn.title = isDark ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro';
+      btn.setAttribute('aria-label', isDark ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro');
+    }
     const toggleText = document.getElementById('theme-toggle-text');
     if (toggleText) {
       toggleText.textContent = isDark ? 'Modo Claro' : 'Modo Oscuro';
@@ -2716,6 +2851,18 @@
       btnThemeToggle.addEventListener('click', toggleTheme);
     }
 
+    // Google Sheets sync badge (mostrador de estatus minimalista y clic para refrescar)
+    const sheetsSyncBadge = document.getElementById('sheets-sync-badge');
+    if (sheetsSyncBadge) {
+      sheetsSyncBadge.addEventListener('click', () => fetchGoogleSheetsData(false));
+      sheetsSyncBadge.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          fetchGoogleSheetsData(false);
+        }
+      });
+    }
+
     // Navigation items
     document.querySelectorAll('.nav-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -2732,23 +2879,6 @@
     document.getElementById('btn-goto-hubs').addEventListener('click', () => switchView('hubs'));
     document.getElementById('btn-goto-enlaces').addEventListener('click', () => switchView('enlaces'));
     document.getElementById('btn-goto-noc').addEventListener('click', () => switchView('noc'));
-
-    // File upload
-    const fileInput = document.getElementById('excel-file-input');
-    fileInput.addEventListener('change', (e) => {
-      if (e.target.files && e.target.files[0]) {
-        handleExcelUpload(e.target.files[0]);
-      }
-    });
-
-    // Drag and drop file support on document
-    window.addEventListener('dragover', (e) => e.preventDefault(), false);
-    window.addEventListener('drop', (e) => {
-      e.preventDefault();
-      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-        handleExcelUpload(e.dataTransfer.files[0]);
-      }
-    }, false);
 
     // HUBS Tabs
     document.querySelectorAll('.hubs-tab-btn').forEach(btn => {
@@ -2855,7 +2985,6 @@
     document.getElementById('btn-print-hubs').addEventListener('click', () => triggerDownloadReport('HUBS'));
     document.getElementById('btn-print-enlaces').addEventListener('click', () => triggerDownloadReport('ENLACES'));
     document.getElementById('btn-print-noc').addEventListener('click', () => triggerDownloadReport('NOC'));
-    document.getElementById('btn-download-all').addEventListener('click', () => triggerDownloadReport('ALL'));
 
     // Excel direct export
     document.getElementById('btn-excel-hubs').addEventListener('click', () => exportSectionToExcel('HUBS'));
@@ -3080,12 +3209,15 @@
 
   function initApp() {
     initTheme();
+    updateSyncBadgeUI('idle', 'Sincronizado');
     processData();
     setupEventListeners();
     renderApp();
     if (state.currentView !== 'general') {
       switchView(state.currentView);
     }
+    // Auto-fetch fresh data from Google Sheets in background
+    fetchGoogleSheetsData(true);
   }
 
   if (document.readyState === 'loading') {
