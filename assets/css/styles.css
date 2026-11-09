@@ -647,6 +647,109 @@ body {
 }
 
 /* ---------------- VISTA GENERAL (HOME DASHBOARD) ---------------- */
+
+/* Utility: Print only element */
+.print-only {
+  display: none !important;
+}
+
+/* Interactive KPI items inside Hero Card */
+.hero-portfolio-card .hero-kpi-item {
+  cursor: pointer;
+  user-select: none;
+}
+
+.hero-portfolio-card .hero-kpi-item.active,
+.hero-portfolio-card .hero-kpi-item.filter-active {
+  border-color: #00bcd4 !important;
+  background: rgba(0, 188, 212, 0.16) !important;
+  box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.4) !important;
+  transform: translateY(-2px);
+}
+
+.hero-portfolio-card .hero-kpi-item.box-completadas.active,
+.hero-portfolio-card .hero-kpi-item.box-completadas.filter-active {
+  border-color: #22c55e !important;
+  background: rgba(34, 197, 94, 0.16) !important;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.4) !important;
+}
+
+.hero-portfolio-card .hero-kpi-item.box-en-curso.active,
+.hero-portfolio-card .hero-kpi-item.box-en-curso.filter-active {
+  border-color: #38bdf8 !important;
+  background: rgba(56, 189, 248, 0.16) !important;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.4) !important;
+}
+
+.hero-portfolio-card .hero-kpi-item.box-no-iniciadas.active,
+.hero-portfolio-card .hero-kpi-item.box-no-iniciadas.filter-active {
+  border-color: #94a3b8 !important;
+  background: rgba(148, 163, 184, 0.16) !important;
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.4) !important;
+}
+
+.hero-portfolio-card .hero-kpi-dual-top {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 2px 4px;
+  transition: background 0.2s;
+}
+
+.hero-portfolio-card .hero-kpi-dual-top:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.hero-portfolio-card .hero-kpi-dual-top.active,
+.hero-portfolio-card .hero-kpi-dual-top.filter-active {
+  background: rgba(255, 255, 255, 0.15);
+  outline: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.hero-portfolio-card .hero-kpi-sub-item {
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 3px 6px;
+  transition: all 0.2s;
+}
+
+.hero-portfolio-card .hero-kpi-sub-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.hero-portfolio-card .hero-kpi-sub-item.active,
+.hero-portfolio-card .hero-kpi-sub-item.filter-active {
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.4);
+}
+
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-hubs-en-curso-ontime.active,
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-enlaces-en-curso-ontime.active,
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-noc-en-curso-ontime.filter-active {
+  background: rgba(56, 189, 248, 0.25);
+  box-shadow: 0 0 0 1.5px #38bdf8;
+}
+
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-hubs-en-curso-late.active,
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-enlaces-en-curso-late.active,
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-noc-en-curso-late.filter-active {
+  background: rgba(251, 146, 60, 0.25);
+  box-shadow: 0 0 0 1.5px #fb923c;
+}
+
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-hubs-no-iniciadas-ontime.active,
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-enlaces-no-iniciadas-ontime.active,
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-noc-no-iniciadas-ontime.filter-active {
+  background: rgba(203, 213, 225, 0.25);
+  box-shadow: 0 0 0 1.5px #cbd5e1;
+}
+
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-hubs-no-iniciadas-late.active,
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-enlaces-no-iniciadas-late.active,
+.hero-portfolio-card .hero-kpi-sub-item#kpi-btn-noc-no-iniciadas-late.filter-active {
+  background: rgba(248, 113, 113, 0.25);
+  box-shadow: 0 0 0 1.5px #f87171;
+}
+
 .hero-portfolio-card {
   background: linear-gradient(135deg, #0b1e33 0%, #112d4e 100%);
   color: #ffffff;
@@ -3438,6 +3541,13 @@ body.dark-mode {
    ========================================================================== */
 
 @media print {
+  .print-only {
+    display: block !important;
+  }
+  .noc-kpis-grid.print-only {
+    display: grid !important;
+  }
+
   @page {
     size: A4 portrait;
     margin: 8mm 8mm 8mm 8mm; /* Margen superior e inferior estrictamente igual a izquierda y derecha */
@@ -3477,7 +3587,10 @@ body.dark-mode {
   .btn-clear-task-filter,
   .btn-clear-select,
   #hubs-active-filter-indicator,
-  #enlaces-active-filter-indicator {
+  #enlaces-active-filter-indicator,
+  #view-hubs .hero-portfolio-card,
+  #view-enlaces .hero-portfolio-card,
+  #view-noc .hero-portfolio-card {
     display: none !important;
   }
 
@@ -3829,77 +3942,223 @@ body.dark-mode {
   }
 
   /* ==========================================================================
+     HUBS & ENLACES PDF EXPORT: DISTRIBUCIÓN DE ANCHO DE 8 COLUMNAS (Con PONDERACION)
+     ========================================================================== */
+  #view-hubs .hub-tasks-table th:nth-child(1),
+  #view-hubs .hub-tasks-table td:nth-child(1),
+  #view-enlaces .hub-tasks-table th:nth-child(1),
+  #view-enlaces .hub-tasks-table td:nth-child(1) {
+    width: 20% !important; /* Tarea */
+  }
+
+  #view-hubs .hub-tasks-table th:nth-child(2),
+  #view-hubs .hub-tasks-table td:nth-child(2),
+  #view-enlaces .hub-tasks-table th:nth-child(2),
+  #view-enlaces .hub-tasks-table td:nth-child(2) {
+    width: 10% !important; /* Estado */
+    text-align: center !important;
+  }
+
+  #view-hubs .hub-tasks-table th:nth-child(3),
+  #view-hubs .hub-tasks-table td:nth-child(3),
+  #view-enlaces .hub-tasks-table th:nth-child(3),
+  #view-enlaces .hub-tasks-table td:nth-child(3) {
+    width: 8% !important; /* PONDERACION */
+    text-align: center !important;
+  }
+
+  #view-hubs .hub-tasks-table th:nth-child(4),
+  #view-hubs .hub-tasks-table td:nth-child(4),
+  #view-enlaces .hub-tasks-table th:nth-child(4),
+  #view-enlaces .hub-tasks-table td:nth-child(4) {
+    width: 11% !important; /* Avance */
+  }
+
+  #view-hubs .hub-tasks-table th:nth-child(5),
+  #view-hubs .hub-tasks-table td:nth-child(5),
+  #view-enlaces .hub-tasks-table th:nth-child(5),
+  #view-enlaces .hub-tasks-table td:nth-child(5) {
+    width: 10% !important; /* Planificada */
+    text-align: center !important;
+    font-size: 7px !important;
+  }
+
+  #view-hubs .hub-tasks-table th:nth-child(6),
+  #view-hubs .hub-tasks-table td:nth-child(6),
+  #view-enlaces .hub-tasks-table th:nth-child(6),
+  #view-enlaces .hub-tasks-table td:nth-child(6) {
+    width: 10% !important; /* Finalización */
+    text-align: center !important;
+    font-size: 7px !important;
+  }
+
+  #view-hubs .hub-tasks-table th:nth-child(7),
+  #view-hubs .hub-tasks-table td:nth-child(7),
+  #view-enlaces .hub-tasks-table th:nth-child(7),
+  #view-enlaces .hub-tasks-table td:nth-child(7) {
+    width: 14% !important; /* Razón */
+  }
+
+  #view-hubs .hub-tasks-table th:nth-child(8),
+  #view-hubs .hub-tasks-table td:nth-child(8),
+  #view-enlaces .hub-tasks-table th:nth-child(8),
+  #view-enlaces .hub-tasks-table td:nth-child(8) {
+    width: 17% !important; /* RESPONSABLES */
+  }
+
+  .ponderacion-cell {
+    text-align: center !important;
+    font-weight: 700 !important;
+    font-size: 7.5px !important;
+    color: #0369a1 !important;
+    white-space: nowrap !important;
+    padding: 2.5px 3.5px !important;
+  }
+
+  .badge-ponderacion {
+    display: inline-block !important;
+    background: #f0f9ff !important;
+    color: #0369a1 !important;
+    border: 1px solid #bae6fd !important;
+    border-radius: 3px !important;
+    padding: 1px 4px !important;
+    font-size: 7px !important;
+    font-weight: 700 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .noc-badge-urgent {
+    font-size: 6.5px !important;
+    padding: 0.5px 3.5px !important;
+    border-radius: 2.5px !important;
+    margin-left: 4px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+
+
+  /* ==========================================================================
      NOC PDF EXPORT: DISTRIBUCIÓN DE ANCHO DE COLUMNAS (Razón reducida a la mitad)
      ========================================================================== */
 
-  /* Tablas de 6 columnas en NOC (2.2 En Curso, 2.3 No Iniciadas, 3 Alertas Retrasadas) */
+  /* Tablas de 7 columnas en NOC (2.2 En Curso, 2.3 No Iniciadas, 3 Alertas Retrasadas) */
+  #view-noc .noc-table-7col th:nth-child(1),
+  #view-noc .noc-table-7col td:nth-child(1),
   #view-noc .noc-table-6col th:nth-child(1),
   #view-noc .noc-table-6col td:nth-child(1) {
-    width: 28% !important; /* Nombre de la Tarea */
+    width: 26% !important; /* Nombre de la Tarea */
   }
 
+  #view-noc .noc-table-7col th:nth-child(2),
+  #view-noc .noc-table-7col td:nth-child(2),
   #view-noc .noc-table-6col th:nth-child(2),
   #view-noc .noc-table-6col td:nth-child(2) {
-    width: 10% !important; /* Avance */
+    width: 7% !important; /* SUBS */
+    text-align: center !important;
   }
 
+  #view-noc .noc-table-7col th:nth-child(3),
+  #view-noc .noc-table-7col td:nth-child(3),
   #view-noc .noc-table-6col th:nth-child(3),
   #view-noc .noc-table-6col td:nth-child(3) {
-    width: 18% !important; /* Departamento */
+    width: 9% !important; /* Avance */
   }
 
+  #view-noc .noc-table-7col th:nth-child(4),
+  #view-noc .noc-table-7col td:nth-child(4),
   #view-noc .noc-table-6col th:nth-child(4),
   #view-noc .noc-table-6col td:nth-child(4) {
-    width: 25% !important; /* Responsables */
+    width: 17% !important; /* Departamento */
   }
 
+  #view-noc .noc-table-7col th:nth-child(5),
+  #view-noc .noc-table-7col td:nth-child(5),
   #view-noc .noc-table-6col th:nth-child(5),
   #view-noc .noc-table-6col td:nth-child(5) {
+    width: 22% !important; /* Responsables */
+  }
+
+  #view-noc .noc-table-7col th:nth-child(6),
+  #view-noc .noc-table-7col td:nth-child(6),
+  #view-noc .noc-table-6col th:nth-child(6),
+  #view-noc .noc-table-6col td:nth-child(6) {
     width: 11% !important; /* Fecha Planificada */
     text-align: center !important;
   }
 
-  #view-noc .noc-table-6col th:nth-child(6),
-  #view-noc .noc-table-6col td:nth-child(6) {
-    width: 8% !important; /* Razón (reducida a la mitad) */
-  }
-
-  /* Tabla de 7 columnas en NOC (2.1 Completadas) */
-  #view-noc .noc-table-7col th:nth-child(1),
-  #view-noc .noc-table-7col td:nth-child(1) {
-    width: 24% !important; /* Nombre de la Tarea */
-  }
-
-  #view-noc .noc-table-7col th:nth-child(2),
-  #view-noc .noc-table-7col td:nth-child(2) {
-    width: 9% !important; /* Avance */
-  }
-
-  #view-noc .noc-table-7col th:nth-child(3),
-  #view-noc .noc-table-7col td:nth-child(3) {
-    width: 17% !important; /* Departamento */
-  }
-
-  #view-noc .noc-table-7col th:nth-child(4),
-  #view-noc .noc-table-7col td:nth-child(4) {
-    width: 22% !important; /* Responsables */
-  }
-
-  #view-noc .noc-table-7col th:nth-child(5),
-  #view-noc .noc-table-7col td:nth-child(5) {
-    width: 10% !important; /* Fecha Planificada */
-    text-align: center !important;
-  }
-
-  #view-noc .noc-table-7col th:nth-child(6),
-  #view-noc .noc-table-7col td:nth-child(6) {
-    width: 10% !important; /* Fecha Finalización */
-    text-align: center !important;
-  }
-
   #view-noc .noc-table-7col th:nth-child(7),
-  #view-noc .noc-table-7col td:nth-child(7) {
-    width: 8% !important; /* Razón (reducida a la mitad) */
+  #view-noc .noc-table-7col td:nth-child(7),
+  #view-noc .noc-table-6col th:nth-child(7),
+  #view-noc .noc-table-6col td:nth-child(7) {
+    width: 8% !important; /* Razón */
+  }
+
+  /* Tabla de 8 columnas en NOC (2.1 Completadas) */
+  #view-noc .noc-table-8col th:nth-child(1),
+  #view-noc .noc-table-8col td:nth-child(1) {
+    width: 22% !important; /* Nombre de la Tarea */
+  }
+
+  #view-noc .noc-table-8col th:nth-child(2),
+  #view-noc .noc-table-8col td:nth-child(2) {
+    width: 7% !important; /* SUBS */
+    text-align: center !important;
+  }
+
+  #view-noc .noc-table-8col th:nth-child(3),
+  #view-noc .noc-table-8col td:nth-child(3) {
+    width: 8% !important; /* Avance */
+  }
+
+  #view-noc .noc-table-8col th:nth-child(4),
+  #view-noc .noc-table-8col td:nth-child(4) {
+    width: 16% !important; /* Departamento */
+  }
+
+  #view-noc .noc-table-8col th:nth-child(5),
+  #view-noc .noc-table-8col td:nth-child(5) {
+    width: 20% !important; /* Responsables */
+  }
+
+  #view-noc .noc-table-8col th:nth-child(6),
+  #view-noc .noc-table-8col td:nth-child(6) {
+    width: 9.5% !important; /* Fecha Planificada */
+    text-align: center !important;
+  }
+
+  #view-noc .noc-table-8col th:nth-child(7),
+  #view-noc .noc-table-8col td:nth-child(7) {
+    width: 9.5% !important; /* Fecha Finalización */
+    text-align: center !important;
+  }
+
+  #view-noc .noc-table-8col th:nth-child(8),
+  #view-noc .noc-table-8col td:nth-child(8) {
+    width: 8% !important; /* Razón */
+  }
+
+  .subs-cell {
+    text-align: center !important;
+    font-weight: 700 !important;
+    font-size: 7.5px !important;
+    color: #0f172a !important;
+    white-space: nowrap !important;
+    padding: 2.5px 3.5px !important;
+  }
+
+  .badge-subs {
+    display: inline-block !important;
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 3px !important;
+    padding: 1px 4px !important;
+    font-size: 7px !important;
+    font-weight: 700 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .task-name-cell {
@@ -4139,4 +4398,75 @@ body.dark-mode {
   .recommendations-list {
     font-size: 7.5px !important;
   }
+}
+
+/* SUBS Column & Badges */
+.subs-cell {
+  text-align: center;
+  font-weight: 600;
+  font-size: 11px;
+  color: #334155;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .subs-cell {
+  color: #cbd5e1;
+}
+
+.badge-subs {
+  display: inline-block;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+[data-theme="dark"] .badge-subs {
+  background: #1e293b;
+  color: #93c5fd;
+  border-color: #3b82f6;
+}
+
+/* PONDERACION Column & Badges in HUBS */
+.ponderacion-cell {
+  text-align: center;
+  font-weight: 700;
+  font-size: 11px;
+  color: #0369a1;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .ponderacion-cell {
+  color: #38bdf8;
+}
+
+.badge-ponderacion {
+  display: inline-block;
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+[data-theme="dark"] .badge-ponderacion {
+  background: rgba(2, 132, 199, 0.15);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+
+
+/* Dark mode support for urgent badge */
+[data-theme="dark"] .noc-badge-urgent {
+  background: rgba(225, 29, 72, 0.18) !important;
+  color: #fda4af !important;
+  border-color: rgba(244, 63, 94, 0.35) !important;
 }

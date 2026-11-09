@@ -103,6 +103,15 @@
     if (heroDateEl) {
       heroDateEl.textContent = `📅 Fecha de Reporte: ${formatted}`;
     }
+
+    const hubsHeroDate = document.getElementById('hubs-hero-report-date');
+    if (hubsHeroDate) hubsHeroDate.textContent = `📅 Fecha de Reporte: ${formatted}`;
+
+    const enlacesHeroDate = document.getElementById('enlaces-hero-report-date');
+    if (enlacesHeroDate) enlacesHeroDate.textContent = `📅 Fecha de Reporte: ${formatted}`;
+
+    const nocHeroDate = document.getElementById('noc-hero-report-date');
+    if (nocHeroDate) nocHeroDate.textContent = `📅 Fecha de Reporte: ${formatted}`;
   }
 
   function recordModification() {
@@ -193,15 +202,77 @@
     return { done, total, str: `${done}/${total}` };
   }
 
+  function getRawRowCompletionDate(r) {
+    if (!r) return null;
+    let val = r['Fecha de finalización'] 
+           ?? r['Fecha de finalizacion'] 
+           ?? r['Fecha de finalizaci\ufffdn'] 
+           ?? r['Fecha de finalizacin'];
+    if (val !== undefined && val !== null) {
+      const s = String(val).trim();
+      if (s && s.toLowerCase() !== 'nan') return val;
+    }
+    for (const k of Object.keys(r)) {
+      if (/fecha.*finaliza/i.test(k)) {
+        const v = r[k];
+        if (v !== undefined && v !== null && String(v).trim().toLowerCase() !== 'nan') {
+          return v;
+        }
+      }
+    }
+    return null;
+  }
+
+  function getRawRowChecklist(r) {
+    if (!r) return '-';
+    let val = r['Elementos de la lista de comprobación completados'] 
+           ?? r['Elementos de la lista de comprobacion completados'] 
+           ?? r['Elementos de la lista de comprobaci\ufffdn completados'] 
+           ?? r['Elementos de la lista de comprobacin completados'];
+    if (val !== undefined && val !== null) {
+      const s = String(val).trim();
+      if (s && s.toLowerCase() !== 'nan') return s;
+    }
+    for (const k of Object.keys(r)) {
+      if (/elementos.*comprobaci.*completad/i.test(k)) {
+        const v = r[k];
+        if (v !== undefined && v !== null && String(v).trim().toLowerCase() !== 'nan') {
+          return String(v).trim();
+        }
+      }
+    }
+    return '-';
+  }
+
+  function getRawRowPlannedDate(r) {
+    if (!r) return null;
+    let val = r['Fecha de vencimiento'] 
+           ?? r['Fecha de vencimiento planificada']
+           ?? r['Fecha planificada'];
+    if (val !== undefined && val !== null) {
+      const s = String(val).trim();
+      if (s && s.toLowerCase() !== 'nan') return val;
+    }
+    for (const k of Object.keys(r)) {
+      if (/fecha.*vencimiento/i.test(k) || /fecha.*planificad/i.test(k)) {
+        const v = r[k];
+        if (v !== undefined && v !== null && String(v).trim().toLowerCase() !== 'nan') {
+          return v;
+        }
+      }
+    }
+    return null;
+  }
+
   function calculateTaskAdvance(task) {
     const status = (task['Estado'] || '').trim().toLowerCase();
-    const chk = parseChecklist(task['Elementos de la lista de comprobación completados']);
+    const chk = parseChecklist(getRawRowChecklist(task));
     
     if (status === 'completado') {
       return 100;
     }
     if (chk.total > 0) {
-      return Math.round((chk.done / chk.total) * 1000) / 10;
+      return Math.round((chk.done / chk.total) * 100);
     }
     if (status === 'en curso') {
       return 50;
@@ -213,18 +284,15 @@
     const rawLate = task['Con retraso'];
     if (rawLate === true || rawLate === 'True' || rawLate === 'true' || rawLate === 1) return true;
     
-    // Check due date
-    const dueStr = formatDate(task['Fecha de vencimiento']);
-    if (dueStr !== '-') {
-      const parts = dueStr.split('/');
-      if (parts.length === 3) {
-        const dueDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-        const status = (task['Estado'] || '').trim().toLowerCase();
-        if (status !== 'completado') {
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          if (dueDate < today) return true;
-        }
+    // Check due date against report date
+    const dueDt = parseDateObj(task['Fecha de vencimiento'] || task['Fecha de vencimiento planificada']);
+    if (dueDt) {
+      const status = (task['Estado'] || '').trim().toLowerCase();
+      if (status !== 'completado') {
+        const rep = (state.lastModifiedDate instanceof Date && !isNaN(state.lastModifiedDate.getTime())) ? state.lastModifiedDate : new Date();
+        const dueMidnight = new Date(dueDt.getFullYear(), dueDt.getMonth(), dueDt.getDate()).getTime();
+        const repMidnight = new Date(rep.getFullYear(), rep.getMonth(), rep.getDate()).getTime();
+        if (dueMidnight < repMidnight) return true;
       }
     }
     return false;
@@ -233,18 +301,13 @@
   function isDueWithin3Days(task) {
     const status = (task['Estado'] || '').trim().toLowerCase();
     if (status === 'completado') return false;
-    const dueStr = formatDate(task['Fecha de vencimiento']);
-    if (dueStr === '-') return false;
-    const parts = dueStr.split('/');
-    if (parts.length === 3) {
-      const dueDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-      // Reference date or today
-      const refDate = new Date(); // or 2026-10-21 corte
-      const diffTime = dueDate.getTime() - refDate.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays >= -1 && diffDays <= 3;
-    }
-    return false;
+    const dueDt = parseDateObj(task['Fecha de vencimiento'] || task['Fecha de vencimiento planificada']);
+    if (!dueDt) return false;
+    const rep = (state.lastModifiedDate instanceof Date && !isNaN(state.lastModifiedDate.getTime())) ? state.lastModifiedDate : new Date();
+    const dueMidnight = new Date(dueDt.getFullYear(), dueDt.getMonth(), dueDt.getDate()).getTime();
+    const repMidnight = new Date(rep.getFullYear(), rep.getMonth(), rep.getDate()).getTime();
+    const diffDays = Math.round((dueMidnight - repMidnight) / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 && diffDays <= 3;
   }
 
   function getAssigneesAndTags(task) {
@@ -355,8 +418,73 @@
     const opEnlacesRaw = getSheet(u => u.includes('ENLACE') && (u.includes('OPERACION') || u.includes('O&M')));
     const nocRaw = getSheet(u => u.includes('NOC') || u.includes('RED IP'));
 
+  function getHubTaskWeight(taskName, category) {
+    if (!taskName) return 0;
+    const nameNorm = taskName.toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\ufffd/g, '')
+      .trim();
+
+    const isOperaciones = category && category.toLowerCase().includes('operacion');
+
+    if (isOperaciones) {
+      // 1. Inspección General = 10%
+      if (nameNorm.includes('inspecc') || nameNorm.startsWith('1')) return 10;
+      // 2. Diagnóstico general (Evaluación de mejoras / plan de ejecución) = 10%
+      if (nameNorm.includes('diagnost') || nameNorm.startsWith('2')) return 10;
+      // 3. Requisición de materiales = 10%
+      if (nameNorm.includes('requisic') || nameNorm.startsWith('3')) return 10;
+      // 4. Implementación de Mejoras = 70%
+      if (nameNorm.includes('mejoras') || nameNorm.includes('implementac') || nameNorm.startsWith('4')) return 70;
+      return 0;
+    } else {
+      // Nuevos Proyectos:
+      // - Gestion de HUBs = 30%
+      if (nameNorm.includes('gesti')) return 30;
+      // - Construcción de HUBs = 30%
+      if (nameNorm.includes('construc')) return 30;
+      // - Implementación de HUBs = 40%
+      if (nameNorm.includes('implementac')) return 40;
+      return 0;
+    }
+  }
+
+  function getEnlaceTaskWeight(taskName, category) {
+    if (!taskName) return 0;
+    const nameNorm = taskName.toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/\ufffd/g, '')
+      .trim();
+
+    const isOperaciones = category && category.toLowerCase().includes('operacion');
+
+    if (isOperaciones) {
+      // 1. Auditoria y diagnostico de la red = 20%
+      if (nameNorm.includes('auditoria') || nameNorm.includes('diagnost')) return 20;
+      // 2. Recuperación óptica = 60%
+      if (nameNorm.includes('recuperac') || nameNorm.includes('optic')) return 60;
+      // 3. Certificación y Documentación = 20%
+      if (nameNorm.includes('certificac') || nameNorm.includes('documentac')) return 20;
+      return 0;
+    } else {
+      // Nuevos Proyectos:
+      // 1. Diseño de la red (BOM, PROYECCIÓN DE HUBS) = 10%
+      if (nameNorm.includes('disen') || nameNorm.includes('bom') || nameNorm.includes('proyecc')) return 10;
+      // 2. Relevamiento y Permisología VGT = 20%
+      if (nameNorm.includes('relevam') || nameNorm.includes('permiso') || nameNorm.includes('vgt')) return 20;
+      // 3. Tendido de cables troncales = 40%
+      if (nameNorm.includes('tendid') || nameNorm.includes('cable') || nameNorm.includes('troncal')) return 40;
+      // 4. Implementación de la red = 30%
+      if (nameNorm.includes('implementac')) return 30;
+      return 0;
+    }
+  }
+
+
+
+
     // Grouping function for HUBs or Enlaces
-    function groupEntities(rows, categoryName) {
+    function groupEntities(rows, categoryName, entityType) {
       const map = new Map();
       rows.forEach(r => {
         const name = (r['Depósito'] || r['Deposito'] || 'Sin Asignar').trim();
@@ -397,18 +525,29 @@
         }
         const finalReason = (customReason !== null && customReason !== undefined) ? customReason : defaultReason;
 
+        const people = getAssigneesAndTags(r);
+        const priorityRaw = r['Priority'] || r['Prioridad'] || r['prioridad'] || r['priority'] || 'Media';
+        const priorityStr = String(priorityRaw).trim().toLowerCase();
+        const hasUrgentTag = people.tags.some(tg => tg.toLowerCase().includes('urgente'));
+        const isUrgent = priorityStr.includes('urgente') || priorityStr.includes('urgent') || hasUrgentTag;
+
+        const weight = (entityType === 'HUBS') ? getHubTaskWeight(taskName, categoryName) : (entityType === 'ENLACES') ? getEnlaceTaskWeight(taskName, categoryName) : 0;
+
         const taskObj = {
           name: taskName,
           status: st,
+          priority: priorityRaw ? String(priorityRaw).trim() : 'Media',
+          isUrgent: isUrgent,
+          weight: weight,
           advance: taskAdvance,
           plannedDate: formatDate(r['Fecha de vencimiento']),
           completedDate: formatDate(r['Fecha de finalización'] || r['Fecha de finalizacion']),
           isCompletedLate: completedLate,
           reason: finalReason,
-          checklist: r['Elementos de la lista de comprobación completados'] || '-',
+          checklist: getRawRowChecklist(r),
           delayed: delayed,
-          assignees: getAssigneesAndTags(r).assignees,
-          tags: getAssigneesAndTags(r).tags,
+          assignees: people.assignees,
+          tags: people.tags,
           raw: r
         };
 
@@ -455,8 +594,13 @@
         });
 
         if (item.tasks.length > 0) {
-          const sum = item.tasks.reduce((acc, t) => acc + t.advance, 0);
-          item.advance = Math.round(sum / item.tasks.length);
+          if (entityType === 'HUBS' || entityType === 'ENLACES') {
+            const weightedSum = item.tasks.reduce((acc, t) => acc + (t.weight * t.advance) / 100, 0);
+            item.advance = Math.round(weightedSum);
+          } else {
+            const sum = item.tasks.reduce((acc, t) => acc + t.advance, 0);
+            item.advance = Math.round(sum / item.tasks.length);
+          }
         }
         list.push(item);
       });
@@ -464,12 +608,12 @@
       return list;
     }
 
-    state.processed.hubsNuevos = groupEntities(npHubsRaw, 'Nuevos Proyectos');
-    state.processed.hubsOperaciones = groupEntities(opHubsRaw, 'Operaciones');
+    state.processed.hubsNuevos = groupEntities(npHubsRaw, 'Nuevos Proyectos', 'HUBS');
+    state.processed.hubsOperaciones = groupEntities(opHubsRaw, 'Operaciones', 'HUBS');
     state.processed.hubsAll = [...state.processed.hubsNuevos, ...state.processed.hubsOperaciones];
 
-    state.processed.enlacesNuevos = groupEntities(npEnlacesRaw, 'Nuevos Proyectos');
-    state.processed.enlacesOperaciones = groupEntities(opEnlacesRaw, 'Operaciones');
+    state.processed.enlacesNuevos = groupEntities(npEnlacesRaw, 'Nuevos Proyectos', 'ENLACES');
+    state.processed.enlacesOperaciones = groupEntities(opEnlacesRaw, 'Operaciones', 'ENLACES');
     state.processed.enlacesAll = [...state.processed.enlacesNuevos, ...state.processed.enlacesOperaciones];
 
     // Process NOC
@@ -480,9 +624,11 @@
       const st = (r['Estado'] || 'No iniciado').trim();
       const people = getAssigneesAndTags(r);
 
+      const rawCompDate = getRawRowCompletionDate(r);
+      const rawPlannedDate = getRawRowPlannedDate(r);
       const completedLate = isCompletedAfterPlanned(
-        r['Fecha de finalización'] || r['Fecha de finalizacion'],
-        r['Fecha de vencimiento']
+        rawCompDate,
+        rawPlannedDate
       );
 
       const dept = (r['Depósito'] || r['Deposito'] || 'Sin Depósito').trim();
@@ -503,11 +649,11 @@
         priority: priority,
         isUrgent: isUrgent,
         advance: taskAdvance,
-        plannedDate: formatDate(r['Fecha de vencimiento']),
-        completedDate: formatDate(r['Fecha de finalización'] || r['Fecha de finalizacion']),
+        plannedDate: formatDate(rawPlannedDate),
+        completedDate: formatDate(rawCompDate),
         isCompletedLate: completedLate,
         reason: finalReason,
-        checklist: r['Elementos de la lista de comprobación completados'] || '-',
+        checklist: getRawRowChecklist(r),
         delayed: delayed,
         dueSoon: dueSoon,
         assignees: people.assignees,
@@ -955,20 +1101,43 @@
 
     const elHubsTotal = document.getElementById('hubs-kpi-total');
     if (elHubsTotal) elHubsTotal.textContent = totalTasks;
+    const elPrintHubsTotal = document.getElementById('print-hubs-kpi-total');
+    if (elPrintHubsTotal) elPrintHubsTotal.textContent = totalTasks;
+
     const elHubsComp = document.getElementById('hubs-kpi-completadas');
     if (elHubsComp) elHubsComp.textContent = completadas;
+    const elPrintHubsComp = document.getElementById('print-hubs-kpi-completadas');
+    if (elPrintHubsComp) elPrintHubsComp.textContent = completadas;
+
     const elHubsCursoTotal = document.getElementById('hubs-kpi-en-curso-total');
     if (elHubsCursoTotal) elHubsCursoTotal.textContent = enCursoTotal;
+    const elPrintHubsCursoTotal = document.getElementById('print-hubs-kpi-en-curso-total');
+    if (elPrintHubsCursoTotal) elPrintHubsCursoTotal.textContent = enCursoTotal;
+
     const elHubsCursoOntime = document.getElementById('hubs-kpi-en-curso-ontime');
     if (elHubsCursoOntime) elHubsCursoOntime.textContent = enCursoOnTime;
+    const elPrintHubsCursoOntime = document.getElementById('print-hubs-kpi-en-curso-ontime');
+    if (elPrintHubsCursoOntime) elPrintHubsCursoOntime.textContent = enCursoOnTime;
+
     const elHubsCursoLate = document.getElementById('hubs-kpi-en-curso-late');
     if (elHubsCursoLate) elHubsCursoLate.textContent = enCursoLate;
+    const elPrintHubsCursoLate = document.getElementById('print-hubs-kpi-en-curso-late');
+    if (elPrintHubsCursoLate) elPrintHubsCursoLate.textContent = enCursoLate;
+
     const elHubsNoIniTotal = document.getElementById('hubs-kpi-no-iniciadas-total');
     if (elHubsNoIniTotal) elHubsNoIniTotal.textContent = noIniciadasTotal;
+    const elPrintHubsNoIniTotal = document.getElementById('print-hubs-kpi-no-iniciadas-total');
+    if (elPrintHubsNoIniTotal) elPrintHubsNoIniTotal.textContent = noIniciadasTotal;
+
     const elHubsNoIniOntime = document.getElementById('hubs-kpi-no-iniciadas-ontime');
     if (elHubsNoIniOntime) elHubsNoIniOntime.textContent = noIniciadasOnTime;
+    const elPrintHubsNoIniOntime = document.getElementById('print-hubs-kpi-no-iniciadas-ontime');
+    if (elPrintHubsNoIniOntime) elPrintHubsNoIniOntime.textContent = noIniciadasOnTime;
+
     const elHubsNoIniLate = document.getElementById('hubs-kpi-no-iniciadas-late');
     if (elHubsNoIniLate) elHubsNoIniLate.textContent = noIniciadasLate;
+    const elPrintHubsNoIniLate = document.getElementById('print-hubs-kpi-no-iniciadas-late');
+    if (elPrintHubsNoIniLate) elPrintHubsNoIniLate.textContent = noIniciadasLate;
 
     // Visual active state on KPI filter buttons & sub-cols
     const kpiBtns = {
@@ -1102,7 +1271,12 @@
       filterSuffix = ` (${filteredHubs.length} de ${baseHubsList.length})`;
     }
     document.getElementById('hubs-badge-total').textContent = `Total HUBs: ${filteredHubs.length}${filterSuffix}`;
-    document.getElementById('hubs-badge-global-advance').textContent = `Avance Global: ${hubsAvg}%`;
+    document.getElementById('hubs-badge-global-advance').textContent = `Avance Promedio Simple: ${hubsAvg}%`;
+
+    const hubsHeroPercent = document.getElementById('hubs-hero-global-percent');
+    if (hubsHeroPercent) hubsHeroPercent.textContent = `${hubsAvg}%`;
+    const hubsHeroFill = document.getElementById('hubs-hero-meter-fill');
+    if (hubsHeroFill) hubsHeroFill.style.width = `${hubsAvg}%`;
 
     // BOX 1: Mini HUB Cards Grid
     const miniGrid = document.getElementById('hubs-mini-cards-grid');
@@ -1203,19 +1377,26 @@
             ? `<td><span class="cell-completed-late" title="Finalizada posterior a la fecha planificada">${task.completedDate}</span></td>`
             : `<td>${task.completedDate}</td>`;
 
+          const urgentBadge = task.isUrgent 
+            ? `<span class="noc-badge-urgent" style="display:inline-block; margin-left:6px; background:#ffe4e6; color:#b91c1c; border:1px solid #fecdd3; border-radius:4px; padding:1px 6px; font-size:10px; font-weight:700;">🔥 Urgente</span>`
+            : '';
+
           rowsHtml += `
             <tr>
-              <td class="task-name-cell">${escapeHtml(task.name)}</td>
+              <td class="task-name-cell">${escapeHtml(task.name)}${urgentBadge}</td>
               <td>
                 <span class="status-pill ${statusClass}">${escapeHtml(task.status)}</span>
                 ${task.delayed ? '<br><span class="pill-retrasada">Retrasada</span>' : ''}
               </td>
+              <td class="ponderacion-cell" style="text-align: center; font-weight: 700;">
+                <span class="badge-ponderacion">${task.weight}%</span>
+              </td>
               <td>
                 <div class="table-progress-cell">
                   <div class="table-progress-track">
-                    <div class="table-progress-fill" style="width: ${task.advance}%; background: ${barColor};"></div>
+                    <div class="table-progress-fill" style="width: ${Math.round(task.advance)}%; background: ${barColor};"></div>
                   </div>
-                  <div class="table-progress-num">${task.advance}%</div>
+                  <div class="table-progress-num">${Math.round(task.advance)}%</div>
                 </div>
               </td>
               <td>${task.plannedDate}</td>
@@ -1243,7 +1424,7 @@
           <div class="hub-card-top-navy">
             <div class="hub-card-name-title">${escapeHtml(hub.name)} <span style="font-size:11px; font-weight:normal; opacity:0.8;">(${hub.category}${filterTaskBadge})</span></div>
             <div class="hub-card-global-progress">
-              <span class="hub-card-global-label">Avance Global</span>
+              <span class="hub-card-global-label">Avance Promedio Ponderado</span>
               <div class="hub-card-global-track">
                 <div class="hub-card-global-fill" style="width: ${hub.advance}%; background: ${fillGradient};"></div>
               </div>
@@ -1256,6 +1437,7 @@
                 <tr>
                   <th>Tarea</th>
                   <th>Estado</th>
+                  <th style="text-align: center;">PONDERACION</th>
                   <th>Avance</th>
                   <th>Planificada</th>
                   <th>Finalización</th>
@@ -1331,20 +1513,43 @@
 
     const elEnlacesTotal = document.getElementById('enlaces-kpi-total');
     if (elEnlacesTotal) elEnlacesTotal.textContent = totalTasks;
+    const elPrintEnlacesTotal = document.getElementById('print-enlaces-kpi-total');
+    if (elPrintEnlacesTotal) elPrintEnlacesTotal.textContent = totalTasks;
+
     const elEnlacesComp = document.getElementById('enlaces-kpi-completadas');
     if (elEnlacesComp) elEnlacesComp.textContent = completadas;
+    const elPrintEnlacesComp = document.getElementById('print-enlaces-kpi-completadas');
+    if (elPrintEnlacesComp) elPrintEnlacesComp.textContent = completadas;
+
     const elEnlacesCursoTotal = document.getElementById('enlaces-kpi-en-curso-total');
     if (elEnlacesCursoTotal) elEnlacesCursoTotal.textContent = enCursoTotal;
+    const elPrintEnlacesCursoTotal = document.getElementById('print-enlaces-kpi-en-curso-total');
+    if (elPrintEnlacesCursoTotal) elPrintEnlacesCursoTotal.textContent = enCursoTotal;
+
     const elEnlacesCursoOntime = document.getElementById('enlaces-kpi-en-curso-ontime');
     if (elEnlacesCursoOntime) elEnlacesCursoOntime.textContent = enCursoOnTime;
+    const elPrintEnlacesCursoOntime = document.getElementById('print-enlaces-kpi-en-curso-ontime');
+    if (elPrintEnlacesCursoOntime) elPrintEnlacesCursoOntime.textContent = enCursoOnTime;
+
     const elEnlacesCursoLate = document.getElementById('enlaces-kpi-en-curso-late');
     if (elEnlacesCursoLate) elEnlacesCursoLate.textContent = enCursoLate;
+    const elPrintEnlacesCursoLate = document.getElementById('print-enlaces-kpi-en-curso-late');
+    if (elPrintEnlacesCursoLate) elPrintEnlacesCursoLate.textContent = enCursoLate;
+
     const elEnlacesNoIniTotal = document.getElementById('enlaces-kpi-no-iniciadas-total');
     if (elEnlacesNoIniTotal) elEnlacesNoIniTotal.textContent = noIniciadasTotal;
+    const elPrintEnlacesNoIniTotal = document.getElementById('print-enlaces-kpi-no-iniciadas-total');
+    if (elPrintEnlacesNoIniTotal) elPrintEnlacesNoIniTotal.textContent = noIniciadasTotal;
+
     const elEnlacesNoIniOntime = document.getElementById('enlaces-kpi-no-iniciadas-ontime');
     if (elEnlacesNoIniOntime) elEnlacesNoIniOntime.textContent = noIniciadasOnTime;
+    const elPrintEnlacesNoIniOntime = document.getElementById('print-enlaces-kpi-no-iniciadas-ontime');
+    if (elPrintEnlacesNoIniOntime) elPrintEnlacesNoIniOntime.textContent = noIniciadasOnTime;
+
     const elEnlacesNoIniLate = document.getElementById('enlaces-kpi-no-iniciadas-late');
     if (elEnlacesNoIniLate) elEnlacesNoIniLate.textContent = noIniciadasLate;
+    const elPrintEnlacesNoIniLate = document.getElementById('print-enlaces-kpi-no-iniciadas-late');
+    if (elPrintEnlacesNoIniLate) elPrintEnlacesNoIniLate.textContent = noIniciadasLate;
 
     // Active state on KPI buttons & sub-cols
     const kpiBtns = {
@@ -1465,7 +1670,12 @@
       filterSuffix = ` (${filteredEnlaces.length} de ${baseEnlacesList.length})`;
     }
     document.getElementById('enlaces-badge-total').textContent = `Total Enlaces: ${filteredEnlaces.length}${filterSuffix}`;
-    document.getElementById('enlaces-badge-global-advance').textContent = `Avance Global: ${enlacesAvg}%`;
+    document.getElementById('enlaces-badge-global-advance').textContent = `Avance Promedio Simple: ${enlacesAvg}%`;
+
+    const enlacesHeroPercent = document.getElementById('enlaces-hero-global-percent');
+    if (enlacesHeroPercent) enlacesHeroPercent.textContent = `${enlacesAvg}%`;
+    const enlacesHeroFill = document.getElementById('enlaces-hero-meter-fill');
+    if (enlacesHeroFill) enlacesHeroFill.style.width = `${enlacesAvg}%`;
 
     // BOX 1: Mini Enlaces Cards Grid
     const miniGrid = document.getElementById('enlaces-mini-cards-grid');
@@ -1567,19 +1777,26 @@
             ? `<td><span class="cell-completed-late" title="Finalizada posterior a la fecha planificada">${task.completedDate}</span></td>`
             : `<td>${task.completedDate}</td>`;
 
+          const urgentBadge = task.isUrgent 
+            ? `<span class="noc-badge-urgent" style="display:inline-block; margin-left:6px; background:#ffe4e6; color:#b91c1c; border:1px solid #fecdd3; border-radius:4px; padding:1px 6px; font-size:10px; font-weight:700;">🔥 Urgente</span>`
+            : '';
+
           rowsHtml += `
             <tr>
-              <td class="task-name-cell">${escapeHtml(task.name)}</td>
+              <td class="task-name-cell">${escapeHtml(task.name)}${urgentBadge}</td>
               <td>
                 <span class="status-pill ${statusClass}">${escapeHtml(task.status)}</span>
                 ${task.delayed ? '<br><span class="pill-retrasada">Retrasada</span>' : ''}
               </td>
+              <td class="ponderacion-cell" style="text-align: center; font-weight: 700;">
+                <span class="badge-ponderacion">${task.weight}%</span>
+              </td>
               <td>
                 <div class="table-progress-cell">
                   <div class="table-progress-track">
-                    <div class="table-progress-fill" style="width: ${task.advance}%; background: ${barColor};"></div>
+                    <div class="table-progress-fill" style="width: ${Math.round(task.advance)}%; background: ${barColor};"></div>
                   </div>
-                  <div class="table-progress-num">${task.advance}%</div>
+                  <div class="table-progress-num">${Math.round(task.advance)}%</div>
                 </div>
               </td>
               <td>${task.plannedDate}</td>
@@ -1607,7 +1824,7 @@
           <div class="hub-card-top-navy" style="background: #112d4e;">
             <div class="hub-card-name-title">${escapeHtml(enlace.name)} <span style="font-size:11px; font-weight:normal; opacity:0.8;">(${enlace.category}${filterTaskBadge})</span></div>
             <div class="hub-card-global-progress">
-              <span class="hub-card-global-label">Avance Global</span>
+              <span class="hub-card-global-label">Avance Promedio Ponderado</span>
               <div class="hub-card-global-track">
                 <div class="hub-card-global-fill" style="width: ${enlace.advance}%; background: ${fillGradient};"></div>
               </div>
@@ -1620,6 +1837,7 @@
                 <tr>
                   <th>Tarea</th>
                   <th>Estado</th>
+                  <th style="text-align: center;">PONDERACION</th>
                   <th>Avance</th>
                   <th>Planificada</th>
                   <th>Finalización</th>
@@ -1703,20 +1921,22 @@
     }
   }
 
-  /* Helper to get planned timestamp for chronological priority sorting (nearest date first) */
+  /* Helper to get planned timestamp for chronological priority sorting (oldest date first) */
   function getTaskPlannedTimestamp(task) {
     if (!task) return Infinity;
-    const dStr = task.plannedDate;
-    if (!dStr || dStr === '-' || dStr === 'nan' || dStr === 'NaN') return Infinity;
-    const parts = dStr.split('/');
-    if (parts.length === 3) {
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
-      const year = parseInt(parts[2], 10);
-      const dt = new Date(year, month, day);
-      if (!isNaN(dt.getTime())) return dt.getTime();
-    }
+    const rawVal = task.raw ? (task.raw['Fecha de vencimiento'] || getRawRowPlannedDate(task.raw)) : null;
+    const dt = parseDateObj(rawVal) || parseDateObj(task.plannedDate);
+    if (dt && !isNaN(dt.getTime())) return dt.getTime();
     return Infinity;
+  }
+
+  /* Helper to get completion timestamp for reverse chronological sorting (most recent date first) */
+  function getTaskCompletedTimestamp(task) {
+    if (!task) return -Infinity;
+    const rawVal = task.raw ? getRawRowCompletionDate(task.raw) : null;
+    const dt = parseDateObj(rawVal) || parseDateObj(task.completedDate);
+    if (dt && !isNaN(dt.getTime())) return dt.getTime();
+    return -Infinity;
   }
 
   /* 4. NOC View (Structured like hubs.pdf/noc.pdf + Filtrable por Tareas & Responsable) */
@@ -1777,20 +1997,53 @@
 
     const elNocTotal = document.getElementById('noc-kpi-total-val');
     if (elNocTotal) elNocTotal.textContent = totalCount;
+    const elPrintNocTotal = document.getElementById('print-noc-kpi-total-val');
+    if (elPrintNocTotal) elPrintNocTotal.textContent = totalCount;
+
     const elNocDone = document.getElementById('noc-kpi-done-val');
     if (elNocDone) elNocDone.textContent = completadas.length;
+    const elPrintNocDone = document.getElementById('print-noc-kpi-done-val');
+    if (elPrintNocDone) elPrintNocDone.textContent = completadas.length;
+
     const elNocCursoTotal = document.getElementById('noc-kpi-curso-total');
     if (elNocCursoTotal) elNocCursoTotal.textContent = enCurso.length;
+    const elPrintNocCursoTotal = document.getElementById('print-noc-kpi-curso-total');
+    if (elPrintNocCursoTotal) elPrintNocCursoTotal.textContent = enCurso.length;
+
     const elNocCursoOntime = document.getElementById('noc-kpi-curso-ontime');
     if (elNocCursoOntime) elNocCursoOntime.textContent = enCursoOntime.length;
+    const elPrintNocCursoOntime = document.getElementById('print-noc-kpi-curso-ontime');
+    if (elPrintNocCursoOntime) elPrintNocCursoOntime.textContent = enCursoOntime.length;
+
     const elNocCursoLate = document.getElementById('noc-kpi-curso-late');
     if (elNocCursoLate) elNocCursoLate.textContent = enCursoLate.length;
+    const elPrintNocCursoLate = document.getElementById('print-noc-kpi-curso-late');
+    if (elPrintNocCursoLate) elPrintNocCursoLate.textContent = enCursoLate.length;
+
     const elNocNotStartedTotal = document.getElementById('noc-kpi-notstarted-total');
     if (elNocNotStartedTotal) elNocNotStartedTotal.textContent = noIniciadas.length;
+    const elPrintNocNotStartedTotal = document.getElementById('print-noc-kpi-notstarted-total');
+    if (elPrintNocNotStartedTotal) elPrintNocNotStartedTotal.textContent = noIniciadas.length;
+
     const elNocNotStartedOntime = document.getElementById('noc-kpi-notstarted-ontime');
     if (elNocNotStartedOntime) elNocNotStartedOntime.textContent = noIniciadasOntime.length;
+    const elPrintNocNotStartedOntime = document.getElementById('print-noc-kpi-notstarted-ontime');
+    if (elPrintNocNotStartedOntime) elPrintNocNotStartedOntime.textContent = noIniciadasOntime.length;
+
     const elNocNotStartedLate = document.getElementById('noc-kpi-notstarted-late');
     if (elNocNotStartedLate) elNocNotStartedLate.textContent = noIniciadasLate.length;
+    const elPrintNocNotStartedLate = document.getElementById('print-noc-kpi-notstarted-late');
+    if (elPrintNocNotStartedLate) elPrintNocNotStartedLate.textContent = noIniciadasLate.length;
+
+    // Update NOC Hero Global meter
+    const currentNocAdv = (state.nocDeptFilter && allNocTasks.length > 0)
+      ? Math.round(allNocTasks.reduce((a, t) => a + (t.advance || 0), 0) / allNocTasks.length)
+      : (state.metrics ? state.metrics.nocAdv : 0);
+
+    const nocHeroPercent = document.getElementById('noc-hero-global-percent');
+    if (nocHeroPercent) nocHeroPercent.textContent = `${currentNocAdv}%`;
+    const nocHeroFill = document.getElementById('noc-hero-meter-fill');
+    if (nocHeroFill) nocHeroFill.style.width = `${currentNocAdv}%`;
 
     const countAllNocEl = document.getElementById('noc-tab-count-all');
     if (countAllNocEl) countAllNocEl.textContent = state.processed.noc.length;
@@ -1879,19 +2132,22 @@
     if (state.nocTaskFilter === 'en_curso_late') displayRetrasadas = enCursoLate;
     else if (state.nocTaskFilter === 'no_iniciadas_late') displayRetrasadas = noIniciadasLate;
 
-    // Sort tasks from nearest date to farthest date for 2.2, 2.3, and 3 (priorities at top)
-    const sortedEnCurso = displayEnCurso.sort((a, b) => getTaskPlannedTimestamp(a) - getTaskPlannedTimestamp(b));
-    const sortedNoIniciadas = displayNoIniciadas.sort((a, b) => getTaskPlannedTimestamp(a) - getTaskPlannedTimestamp(b));
-    const sortedRetrasadas = displayRetrasadas.sort((a, b) => getTaskPlannedTimestamp(a) - getTaskPlannedTimestamp(b));
+    // Sort tasks from oldest to most recent date for 2.2, 2.3, and 3 (oldest at top)
+    const sortedEnCurso = [...displayEnCurso].sort((a, b) => getTaskPlannedTimestamp(a) - getTaskPlannedTimestamp(b));
+    const sortedNoIniciadas = [...displayNoIniciadas].sort((a, b) => getTaskPlannedTimestamp(a) - getTaskPlannedTimestamp(b));
+    const sortedRetrasadas = [...displayRetrasadas].sort((a, b) => getTaskPlannedTimestamp(a) - getTaskPlannedTimestamp(b));
+
+    // Sort completed tasks from most recent to most distant using FECHA FINALIZACION
+    const sortedCompletadas = [...completadas].sort((a, b) => getTaskCompletedTimestamp(b) - getTaskCompletedTimestamp(a));
 
     // SECTION 2: Estado Detallado
     // 2.1 Completadas
-    document.getElementById('noc-count-done-badge').textContent = `${completadas.length} elementos`;
-    renderNocTableRows('noc-table-completed-body', completadas, true, false);
+    document.getElementById('noc-count-done-badge').textContent = `${sortedCompletadas.length} elementos`;
+    renderNocTableRows('noc-table-completed-body', sortedCompletadas, true, false);
 
     // 2.2 En Curso
     document.getElementById('noc-count-prog-badge').textContent = `${sortedEnCurso.length} elementos`;
-    renderNocTableRows('noc-table-inprogress-body', sortedEnCurso, false, false);
+    renderNocTableRows('noc-table-inprogress-body', sortedEnCurso, false, true);
 
     // 2.3 No Iniciadas (fechas retrasadas o a vencerse en 3 días en ROJO)
     document.getElementById('noc-count-notstarted-badge').textContent = `${sortedNoIniciadas.length} elementos`;
@@ -1958,17 +2214,19 @@
 
   function isDateOverdueOrDueSoon(task) {
     if (!task) return false;
-    if (!task.plannedDate || task.plannedDate === '-' || task.plannedDate === 'nan') return false;
-    if (task.delayed || task.dueSoon) return true;
-    const parts = task.plannedDate.split('/');
-    if (parts.length === 3) {
-      const due = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
-      const now = new Date();
-      now.setHours(0, 0, 0, 0);
-      const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      return diffDays <= 3;
-    }
-    return false;
+    const dueDt = parseDateObj(task.plannedDate) || (task.raw ? parseDateObj(task.raw['Fecha de vencimiento'] || getRawRowPlannedDate(task.raw)) : null);
+    if (!dueDt || isNaN(dueDt.getTime())) return false;
+
+    const rep = (state.lastModifiedDate instanceof Date && !isNaN(state.lastModifiedDate.getTime()))
+      ? state.lastModifiedDate
+      : new Date();
+
+    const dueMidnight = new Date(dueDt.getFullYear(), dueDt.getMonth(), dueDt.getDate()).getTime();
+    const repMidnight = new Date(rep.getFullYear(), rep.getMonth(), rep.getDate()).getTime();
+
+    const diffDays = Math.round((dueMidnight - repMidnight) / (1000 * 60 * 60 * 24));
+    // Superada por la fecha del reporte (diffDays < 0) o a 3 días o menos de vencerse (diffDays <= 3)
+    return diffDays <= 3;
   }
 
   function renderNocTableRows(containerId, tasks, showCompletionDate, highlightDueSoon) {
@@ -1976,7 +2234,7 @@
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const colSpan = showCompletionDate ? 7 : 6;
+    const colSpan = showCompletionDate ? 8 : 7;
     if (tasks.length === 0) {
       tbody.innerHTML = `<tr><td colspan="${colSpan}" style="text-align:center; padding: 20px; color: #94a3b8;">No hay tareas que coincidan con el filtro</td></tr>`;
       return;
@@ -2013,14 +2271,19 @@
         ? `<span class="due-date-alert-red">${task.plannedDate}</span>` 
         : escapeHtml(task.plannedDate);
 
+      const subsDisplay = (task.checklist && task.checklist !== '-' && task.checklist.toLowerCase() !== 'nan')
+        ? `<span class="badge-subs">${escapeHtml(task.checklist)}</span>`
+        : `<span style="color:#94a3b8;">-</span>`;
+
       tr.innerHTML = `
         <td class="task-name-cell">${escapeHtml(task.name)}${urgentBadge}</td>
+        <td class="subs-cell">${subsDisplay}</td>
         <td>
           <div class="table-progress-cell" style="min-width: 90px;">
             <div class="table-progress-track">
-              <div class="table-progress-fill" style="width: ${task.advance}%; background: ${task.advance === 100 ? '#22c55e' : (task.advance > 0 ? '#0284c7' : '#cbd5e1')};"></div>
+              <div class="table-progress-fill" style="width: ${Math.round(task.advance)}%; background: ${task.advance === 100 ? '#22c55e' : (task.advance > 0 ? '#0284c7' : '#cbd5e1')};"></div>
             </div>
-            <div class="table-progress-num">${task.advance}%</div>
+            <div class="table-progress-num">${Math.round(task.advance)}%</div>
           </div>
         </td>
         <td><span class="dept-cell-name">${escapeHtml(task.department)}</span></td>
@@ -2122,14 +2385,14 @@
             {
               label: 'Operaciones',
               data: [m.hubsOpAdv, m.enlacesOpAdv, null],
-              backgroundColor: '#64748b',
+              backgroundColor: '#22c55e',
               borderRadius: 4,
               borderWidth: 1
             },
             {
               label: 'Red IP (NOC)',
               data: [null, null, m.nocAdv],
-              backgroundColor: isDark ? '#00bcd4' : '#0f2942',
+              backgroundColor: isDark ? '#fb923c' : '#f97316',
               borderRadius: 4,
               borderWidth: 1
             }
@@ -2220,7 +2483,7 @@
               m.noIniciadasATiempo,
               m.noIniciadasRetrasadas
             ],
-            backgroundColor: ['#22c55e', '#0284c7', '#ea580c', '#94a3b8', '#dc2626'],
+            backgroundColor: ['#22c55e', '#0284c7', '#eab308', '#94a3b8', '#dc2626'],
             hoverOffset: 6
           }]
         },
@@ -2534,9 +2797,10 @@
           hubsExportRows.push({
             'HUB': h.name,
             'Sección': h.category,
-            'Avance Global HUB': `${h.advance}%`,
+            'Avance Promedio Ponderado HUB': `${h.advance}%`,
             'Tarea': t.name,
             'Estado': t.status,
+            'PONDERACION': `${t.weight}%`,
             'Avance Tarea': `${t.advance}%`,
             'Fecha Planificada': t.plannedDate,
             'Fecha Finalización': t.completedDate,
@@ -2557,9 +2821,10 @@
           enlacesExportRows.push({
             'Enlace Troncal': e.name,
             'Sección': e.category,
-            'Avance Global Enlace': `${e.advance}%`,
+            'Avance Promedio Ponderado Enlace': `${e.advance}%`,
             'Tarea': t.name,
             'Estado': t.status,
+            'PONDERACION': `${t.weight}%`,
             'Avance Tarea': `${t.advance}%`,
             'Fecha Planificada': t.plannedDate,
             'Fecha Finalización': t.completedDate,
@@ -2576,10 +2841,10 @@
     if (section === 'NOC' || section === 'ALL') {
       const nocExportRows = state.processed.noc.map(t => ({
         'Nombre de la tarea': t.name,
+        'SUBS': t.checklist,
+        'Avance': `${t.advance}%`,
         'Departamento / Depósito': t.department,
         'Estado': t.status,
-        'Subtareas': t.checklist,
-        'Avance': `${t.advance}%`,
         'Asignado a': t.assignees.join('; '),
         'Etiquetas': t.tags.join('; '),
         'Fecha Planificada': t.plannedDate,
