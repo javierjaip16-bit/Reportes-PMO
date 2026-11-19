@@ -2621,7 +2621,8 @@
      ========================================================================== */
 
   const GOOGLE_SHEETS_CONFIG = {
-    url: 'https://script.google.com/macros/s/AKfycbzLb7MTfQwsefep1bd6UxxxIVV6fEEsahG-eiOQiIYSxp0h0I_4SQvMThmTbjjsnqVM/exec',
+    // URL protegida en Cloud Firestore (colección: config / documento: pmo -> campo: sheetsUrl)
+    url: '',
     storageKey: 'pmo_sheets_url',
     dataCacheKey: 'pmo_cached_sheets_data',
     lastSyncKey: 'pmo_last_sync_time'
@@ -2682,6 +2683,9 @@
   }
 
   function getGoogleSheetsUrl() {
+    if (window.PMO_SECURE_SHEETS_URL) {
+      return window.PMO_SECURE_SHEETS_URL;
+    }
     try {
       return localStorage.getItem(GOOGLE_SHEETS_CONFIG.storageKey) || GOOGLE_SHEETS_CONFIG.url;
     } catch (e) {
@@ -2690,13 +2694,19 @@
   }
 
   async function fetchGoogleSheetsData(isBackground = false) {
+    const url = getGoogleSheetsUrl();
+
+    if (!url) {
+      updateSyncBadgeUI('error', 'Configurar Firestore', 'Falta config/pmo');
+      showToast('⚠️ Falta guardar sheetsUrl en Firestore (Colección: config -> Documento: pmo).');
+      return;
+    }
+
     updateSyncBadgeUI('syncing', 'Sincronizando...', 'Actualizando...');
 
     if (!isBackground) {
       showToast('Conectando con Google Sheets...');
     }
-
-    const url = getGoogleSheetsUrl();
 
     try {
       const response = await fetch(url, {
@@ -3469,10 +3479,15 @@
   }
 
   /* ==========================================================================
-     STARTUP
+     STARTUP (PROTEGIDO POR COMPUERTA DE AUTENTICACIÓN FIREBASE)
      ========================================================================== */
 
+  let isAppStarted = false;
+
   function initApp() {
+    if (isAppStarted) return;
+    isAppStarted = true;
+
     initTheme();
     updateSyncBadgeUI('idle', 'Sincronizado');
     processData();
@@ -3481,14 +3496,17 @@
     if (state.currentView !== 'general') {
       switchView(state.currentView);
     }
-    // Auto-fetch fresh data from Google Sheets in background
+    // Auto-fetch fresh data from Google Sheets in background only after auth
     fetchGoogleSheetsData(true);
   }
 
+  // Aplicar tema visual de inmediato, pero esperar a que auth.js valide la sesión para iniciar el dashboard
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initApp);
+    document.addEventListener('DOMContentLoaded', initTheme);
   } else {
-    initApp();
+    initTheme();
   }
+
+  window.PMO_START_APP = initApp;
 
 })();

@@ -1,0 +1,98 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// This security rules file assumes the following data structures:
+//
+// Collection: config
+// Document ID: pmo (singleton configuration document)
+// Fields:
+//   - sheetsUrl: string (required, valid HTTPS URL, 1..2048 chars, managed via Firebase Console)
+//     Stores the Google Sheets CSV/export synchronization URL for the PMO dashboard.
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the user is authenticated via Firebase Authentication
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user owns the resource (for user-owned documents)
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Verify UID hasn't been tampered with on create
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) ||
+        request.resource.data.uid == request.auth.uid;
+    }
+
+    // Ensure uid field is not modified on update
+    function uidNotModified() {
+      return !('uid' in request.resource.data) ||
+        request.resource.data.uid == resource.data.uid;
+    }
+
+    // Validate required fields exist
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validate that the document contains only the allowed fields
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate string length bounds to prevent Resource Exhaustion / DoS
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    // Validate HTTPS URL format
+    function isValidHttpsUrl(url) {
+      return url is string && url.matches("^https://.*");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    // Schema validator for /config/pmo (kept for reference; client writes are disabled)
+    function isValidPmoConfig(data) {
+      return hasRequiredFields(['sheetsUrl']) &&
+        hasOnlyAllowedFields(['sheetsUrl']) &&
+        validStringLength('sheetsUrl', 10, 2048) &&
+        isValidHttpsUrl(data.sheetsUrl);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // Singleton PMO configuration document (/config/pmo)
+    // Authenticated users can read (get) the Google Sheets URL.
+    // Client-side writes are strictly forbidden; document is managed via Firebase Console.
+    match /config/pmo {
+      allow get: if isAuthenticated();
+      allow list: if false;
+      allow write: if false;
+    }
+
+    // Default deny-all fallback rule for all other collections and documents
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
